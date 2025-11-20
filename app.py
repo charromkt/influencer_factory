@@ -270,6 +270,57 @@ with col_tools:
                             except Exception as e:
                                 st.error(f"Error: {e}")
 
+                # Botón para generar MÁS ideas (append)
+                if st.session_state['ideas'] and st.button("🔄 Generar 5 Ideas Más"):
+                    if not client:
+                        st.error("Falta API Key.")
+                    else:
+                        with st.spinner("Pensando más ideas..."):
+                            profile_str = json.dumps(st.session_state['profile'])
+                            # Prompt simplificado para añadir más
+                            more_ideas_prompt = f"""
+                            Genera 5 ideas ADICIONALES de video para este perfil.
+                            Perfil: {profile_str}
+                            Output: JSON con clave 'ideas' (lista de objetos {{'titulo', 'pilar', 'gancho_visual'}}).
+                            """
+                            try:
+                                response = client.chat.completions.create(
+                                    model="gpt-4o",
+                                    messages=[
+                                        {"role": "system", "content": "Eres un experto en marketing viral. Devuelve JSON."},
+                                        {"role": "user", "content": more_ideas_prompt}
+                                    ],
+                                    response_format={"type": "json_object"}
+                                )
+                                data = json.loads(response.choices[0].message.content)
+                                new_ideas = data.get('ideas', []) if isinstance(data, dict) else data
+                                st.session_state['ideas'].extend(new_ideas)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                
+                # Sección para agregar idea personalizada
+                with st.expander("➕ Agregar Idea Personalizada"):
+                    with st.form("custom_idea_form"):
+                        custom_title = st.text_input("Título de la Idea")
+                        custom_hook = st.text_input("Gancho Visual (Opcional)")
+                        custom_pilar = st.selectbox("Pilar", ["EDUCACIÓN", "CURIOSIDAD", "POLÉMICA", "LIFESTYLE", "GAMIFICACIÓN", "OTRO"])
+                        
+                        if st.form_submit_button("Agregar Idea"):
+                            if custom_title:
+                                new_custom_idea = {
+                                    "titulo": custom_title,
+                                    "pilar": custom_pilar,
+                                    "gancho_visual": custom_hook if custom_hook else "N/A"
+                                }
+                                if st.session_state['ideas'] is None:
+                                    st.session_state['ideas'] = []
+                                st.session_state['ideas'].append(new_custom_idea)
+                                st.success("Idea agregada.")
+                                st.rerun()
+                            else:
+                                st.warning("El título es obligatorio.")
+
                 if st.session_state['ideas']:
                     st.write("---")
                     options = [f"[{idea['pilar']}] {idea['titulo']}" for idea in st.session_state['ideas']]
@@ -289,6 +340,27 @@ with col_tools:
             else:
                 st.caption(f"Idea: {st.session_state['selected_idea']['titulo']}")
                 
+                # Configuración Avanzada del Guionista (Editable)
+                with st.expander("⚙️ Configuración Avanzada del Guionista", expanded=False):
+                    default_script_prompt = """Eres el Guionista Senior de Brand People. Escribe el guión para la idea seleccionada.
+         
+LA FÓRMULA MATEMÁTICA DEL GUIÓN (NO TE DESVÍES):
+1. EL GANCHO (0-3 seg): Prohibido saludar. Inicia con Afirmación Polémica, Lista o Reto.
+2. EL CUERPO (4-50 seg): Velocidad alta. Frases cortas. Jerga técnica explicada rápido.
+3. EL CTA (Final): Llamado a la acción específico.
+
+Perfil: {profile_str}
+Idea: {idea_str}
+
+Formato: Texto plano, líneas dobles."""
+                    
+                    script_instructions = st.text_area(
+                        "Instrucciones para el Guionista (Prompt):", 
+                        value=default_script_prompt,
+                        height=300,
+                        help="Puedes editar estas instrucciones. Mantén {profile_str} y {idea_str} donde quieras que se inserten los datos."
+                    )
+                
                 if st.button("Escribir Guión", type="primary", use_container_width=True):
                     if not client:
                         st.error("Falta API Key.")
@@ -297,26 +369,15 @@ with col_tools:
                             profile_str = json.dumps(st.session_state['profile'])
                             idea_str = json.dumps(st.session_state['selected_idea'])
                             
-                            script_prompt = f"""
-                            Eres el Guionista Senior de Brand People. Escribe el guión para la idea seleccionada.
-                 
-                            LA FÓRMULA MATEMÁTICA DEL GUIÓN (NO TE DESVÍES):
-                            1. EL GANCHO (0-3 seg): Prohibido saludar. Inicia con Afirmación Polémica, Lista o Reto.
-                            2. EL CUERPO (4-50 seg): Velocidad alta. Frases cortas. Jerga técnica explicada rápido.
-                            3. EL CTA (Final): Llamado a la acción específico.
-                            
-                            Perfil: {profile_str}
-                            Idea: {idea_str}
-                            
-                            Formato: Texto plano, líneas dobles.
-                            """
+                            # Usar el prompt del área de texto si existe, sino el default
+                            final_script_prompt = script_instructions.replace("{profile_str}", profile_str).replace("{idea_str}", idea_str)
                             
                             try:
                                 response = client.chat.completions.create(
                                     model="gpt-4o",
                                     messages=[
                                         {"role": "system", "content": "Eres un guionista experto."},
-                                        {"role": "user", "content": script_prompt}
+                                        {"role": "user", "content": final_script_prompt}
                                     ]
                                 )
                                 st.session_state['script'] = response.choices[0].message.content
