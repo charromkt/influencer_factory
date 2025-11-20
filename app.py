@@ -308,191 +308,191 @@ with col_tools:
                 if current_profile['dna']:
                     with st.expander("Ver ADN de Marca", expanded=True):
                         st.json(current_profile['dna'])
-        # --- VISTA 2: EL ESTRATEGA ---
-        elif stage == "2. El Estratega 🧠":
-            st.subheader("🧠 Estrategia")
-            
-            if not current_profile['dna']:
-                st.warning("⚠️ Completa la Fase 1 (Perfilado) primero.")
-            else:
-                st.caption("Perfil: " + current_profile['name'])
+            # --- VISTA 2: EL ESTRATEGA ---
+            elif stage == "2. El Estratega 🧠":
+                st.subheader("🧠 Estrategia")
                 
-                # --- GESTIÓN DE TEMAS ---
-                st.markdown("### 📂 Temas / Campañas")
-                
-                # Ensure 'topics' key exists in current_profile
-                if 'topics' not in current_profile:
-                    current_profile['topics'] = {}
-
-                # Crear Nuevo Tema
-                with st.expander("➕ Nuevo Tema", expanded=not bool(current_profile['topics'])):
-                    new_topic_name = st.text_input("Nombre del Tema (ej: Black Friday, Educativo, Lanzamiento)")
-                    if st.button("Crear Tema"):
-                        if new_topic_name:
-                            topic_id = str(uuid.uuid4())
-                            current_profile['topics'][topic_id] = {
-                                "name": new_topic_name,
-                                "ideas": []
-                            }
-                            st.success(f"Tema '{new_topic_name}' creado.")
-                            st.rerun()
-                
-                # Seleccionar Tema Activo
-                if not current_profile['topics']:
-                    st.info("Crea un tema para empezar a generar ideas.")
+                if not current_profile['dna']:
+                    st.warning("⚠️ Completa la Fase 1 (Perfilado) primero.")
                 else:
+                    st.caption("Perfil: " + current_profile['name'])
+                    
+                    # --- GESTIÓN DE TEMAS ---
+                    st.markdown("### 📂 Temas / Campañas")
+                    
+                    # Ensure 'topics' key exists in current_profile
+                    if 'topics' not in current_profile:
+                        current_profile['topics'] = {}
+
+                    # Crear Nuevo Tema
+                    with st.expander("➕ Nuevo Tema", expanded=not bool(current_profile['topics'])):
+                        new_topic_name = st.text_input("Nombre del Tema (ej: Black Friday, Educativo, Lanzamiento)")
+                        if st.button("Crear Tema"):
+                            if new_topic_name:
+                                topic_id = str(uuid.uuid4())
+                                current_profile['topics'][topic_id] = {
+                                    "name": new_topic_name,
+                                    "ideas": []
+                                }
+                                st.success(f"Tema '{new_topic_name}' creado.")
+                                st.rerun()
+                    
+                    # Seleccionar Tema Activo
+                    if not current_profile['topics']:
+                        st.info("Crea un tema para empezar a generar ideas.")
+                    else:
+                        topic_options = {tid: t['name'] for tid, t in current_profile['topics'].items()}
+                        selected_topic_id = st.selectbox(
+                            "Seleccionar Tema Activo:",
+                            options=list(topic_options.keys()),
+                            format_func=lambda x: topic_options[x]
+                        )
+                        
+                        current_topic = current_profile['topics'][selected_topic_id]
+                        
+                        st.divider()
+                        st.subheader(f"💡 Ideas para: {current_topic['name']}")
+                        
+                        # Generar Ideas (Si está vacío)
+                        if not current_topic['ideas']:
+                            if st.button(f"Generar Ideas para {current_topic['name']}", type="primary", use_container_width=True):
+                                if not client:
+                                    st.error("Falta API Key.")
+                                else:
+                                    with st.spinner("Pensando..."):
+                                        profile_str = json.dumps(current_profile['dna'])
+                                        ideas_prompt = f"""
+                                        Actúa como Director Creativo. Usando el perfil JSON, genera 10 ideas de video para el tema '{current_topic['name']}'.
+                                        Basadas en los 5 Pilares: EDUCACIÓN, CURIOSIDAD, POLÉMICA, LIFESTYLE, GAMIFICACIÓN.
+                                        
+                                        Perfil: {profile_str}
+                                        
+                                        Output esperado: JSON con clave 'ideas' (lista de objetos {{'id': 'uuid', 'titulo', 'pilar', 'gancho_visual', 'script': null}}).
+                                        """
+                                        
+                                        try:
+                                            response = client.chat.completions.create(
+                                                model="gpt-4o",
+                                                messages=[
+                                                    {"role": "system", "content": "Eres un experto en marketing viral. Devuelve JSON."},
+                                                    {"role": "user", "content": ideas_prompt}
+                                                ],
+                                                response_format={"type": "json_object"}
+                                            )
+                                            data = json.loads(response.choices[0].message.content)
+                                            new_ideas = data.get('ideas', []) if isinstance(data, dict) else data
+                                            
+                                            # Asegurar ID y script null
+                                            for idea in new_ideas:
+                                                idea['id'] = str(uuid.uuid4())
+                                                if 'script' not in idea: idea['script'] = None
+                                                
+                                            current_topic['ideas'] = new_ideas
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error: {e}")
+
+                        # Mostrar Ideas Existentes
+                        else:
+                            # Botón para generar MÁS ideas
+                            if st.button("🔄 Generar 5 Ideas Más"):
+                                if not client:
+                                    st.error("Falta API Key.")
+                                else:
+                                    with st.spinner("Pensando más ideas..."):
+                                        profile_str = json.dumps(current_profile['dna'])
+                                        more_ideas_prompt = f"""
+                                        Genera 5 ideas ADICIONALES de video para el tema '{current_topic['name']}' y este perfil.
+                                        Perfil: {profile_str}
+                                        Output: JSON con clave 'ideas' (lista de objetos {{'titulo', 'pilar', 'gancho_visual'}}).
+                                        """
+                                        try:
+                                            response = client.chat.completions.create(
+                                                model="gpt-4o",
+                                                messages=[
+                                                    {"role": "system", "content": "Eres un experto en marketing viral. Devuelve JSON."},
+                                                    {"role": "user", "content": more_ideas_prompt}
+                                                ],
+                                                response_format={"type": "json_object"}
+                                            )
+                                            data = json.loads(response.choices[0].message.content)
+                                            new_ideas = data.get('ideas', []) if isinstance(data, dict) else data
+                                            for idea in new_ideas:
+                                                idea['id'] = str(uuid.uuid4())
+                                                idea['script'] = None
+                                            current_topic['ideas'].extend(new_ideas)
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error: {e}")
+                            
+                            # Agregar Idea Personalizada
+                            with st.expander("➕ Agregar Idea Personalizada"):
+                                with st.form("custom_idea_form"):
+                                    custom_title = st.text_input("Título de la Idea")
+                                    custom_hook = st.text_input("Gancho Visual (Opcional)")
+                                    custom_pilar = st.selectbox("Pilar", ["EDUCACIÓN", "CURIOSIDAD", "POLÉMICA", "LIFESTYLE", "GAMIFICACIÓN", "OTRO"])
+                                    
+                                    if st.form_submit_button("Agregar Idea"):
+                                        if custom_title:
+                                            new_custom_idea = {
+                                                "id": str(uuid.uuid4()),
+                                                "titulo": custom_title,
+                                                "pilar": custom_pilar,
+                                                "gancho_visual": custom_hook if custom_hook else "N/A",
+                                                "script": None
+                                            }
+                                            current_topic['ideas'].append(new_custom_idea)
+                                            st.success("Idea agregada.")
+                                            st.rerun()
+                                        else:
+                                            st.warning("El título es obligatorio.")
+
+                            st.write("---")
+                            for idea in current_topic['ideas']:
+                                with st.expander(f"[{idea['pilar']}] {idea['titulo']}"):
+                                    st.write(f"**Gancho:** {idea['gancho_visual']}")
+                                    if idea.get('script'):
+                                        st.success("✅ Guión listo")
+
+            # --- VISTA 3: EL GUIONISTA ---
+            elif stage == "3. El Guionista ✍️":
+                st.subheader("✍️ Guionización")
+                
+                if not current_profile['topics']:
+                    st.warning("⚠️ Primero crea Temas e Ideas en la Fase 2.")
+                else:
+                    # Selector de Tema
                     topic_options = {tid: t['name'] for tid, t in current_profile['topics'].items()}
                     selected_topic_id = st.selectbox(
-                        "Seleccionar Tema Activo:",
+                        "Seleccionar Tema:",
                         options=list(topic_options.keys()),
-                        format_func=lambda x: topic_options[x]
+                        format_func=lambda x: topic_options[x],
+                        key="script_topic_selector"
                     )
-                    
                     current_topic = current_profile['topics'][selected_topic_id]
                     
-                    st.divider()
-                    st.subheader(f"💡 Ideas para: {current_topic['name']}")
-                    
-                    # Generar Ideas (Si está vacío)
                     if not current_topic['ideas']:
-                        if st.button(f"Generar Ideas para {current_topic['name']}", type="primary", use_container_width=True):
-                            if not client:
-                                st.error("Falta API Key.")
-                            else:
-                                with st.spinner("Pensando..."):
-                                    profile_str = json.dumps(current_profile['dna'])
-                                    ideas_prompt = f"""
-                                    Actúa como Director Creativo. Usando el perfil JSON, genera 10 ideas de video para el tema '{current_topic['name']}'.
-                                    Basadas en los 5 Pilares: EDUCACIÓN, CURIOSIDAD, POLÉMICA, LIFESTYLE, GAMIFICACIÓN.
-                                    
-                                    Perfil: {profile_str}
-                                    
-                                    Output esperado: JSON con clave 'ideas' (lista de objetos {{'id': 'uuid', 'titulo', 'pilar', 'gancho_visual', 'script': null}}).
-                                    """
-                                    
-                                    try:
-                                        response = client.chat.completions.create(
-                                            model="gpt-4o",
-                                            messages=[
-                                                {"role": "system", "content": "Eres un experto en marketing viral. Devuelve JSON."},
-                                                {"role": "user", "content": ideas_prompt}
-                                            ],
-                                            response_format={"type": "json_object"}
-                                        )
-                                        data = json.loads(response.choices[0].message.content)
-                                        new_ideas = data.get('ideas', []) if isinstance(data, dict) else data
-                                        
-                                        # Asegurar ID y script null
-                                        for idea in new_ideas:
-                                            idea['id'] = str(uuid.uuid4())
-                                            if 'script' not in idea: idea['script'] = None
-                                            
-                                        current_topic['ideas'] = new_ideas
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"Error: {e}")
-
-                    # Mostrar Ideas Existentes
+                        st.warning("Este tema no tiene ideas aún.")
                     else:
-                        # Botón para generar MÁS ideas
-                        if st.button("🔄 Generar 5 Ideas Más"):
-                            if not client:
-                                st.error("Falta API Key.")
-                            else:
-                                with st.spinner("Pensando más ideas..."):
-                                    profile_str = json.dumps(current_profile['dna'])
-                                    more_ideas_prompt = f"""
-                                    Genera 5 ideas ADICIONALES de video para el tema '{current_topic['name']}' y este perfil.
-                                    Perfil: {profile_str}
-                                    Output: JSON con clave 'ideas' (lista de objetos {{'titulo', 'pilar', 'gancho_visual'}}).
-                                    """
-                                    try:
-                                        response = client.chat.completions.create(
-                                            model="gpt-4o",
-                                            messages=[
-                                                {"role": "system", "content": "Eres un experto en marketing viral. Devuelve JSON."},
-                                                {"role": "user", "content": more_ideas_prompt}
-                                            ],
-                                            response_format={"type": "json_object"}
-                                        )
-                                        data = json.loads(response.choices[0].message.content)
-                                        new_ideas = data.get('ideas', []) if isinstance(data, dict) else data
-                                        for idea in new_ideas:
-                                            idea['id'] = str(uuid.uuid4())
-                                            idea['script'] = None
-                                        current_topic['ideas'].extend(new_ideas)
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"Error: {e}")
+                        # Selector de Idea
+                        idea_options = {idea['id']: idea['titulo'] for idea in current_topic['ideas']}
+                        selected_idea_id = st.selectbox(
+                            "Seleccionar Idea:",
+                            options=list(idea_options.keys()),
+                            format_func=lambda x: idea_options[x],
+                            key="script_idea_selector"
+                        )
                         
-                        # Agregar Idea Personalizada
-                        with st.expander("➕ Agregar Idea Personalizada"):
-                            with st.form("custom_idea_form"):
-                                custom_title = st.text_input("Título de la Idea")
-                                custom_hook = st.text_input("Gancho Visual (Opcional)")
-                                custom_pilar = st.selectbox("Pilar", ["EDUCACIÓN", "CURIOSIDAD", "POLÉMICA", "LIFESTYLE", "GAMIFICACIÓN", "OTRO"])
-                                
-                                if st.form_submit_button("Agregar Idea"):
-                                    if custom_title:
-                                        new_custom_idea = {
-                                            "id": str(uuid.uuid4()),
-                                            "titulo": custom_title,
-                                            "pilar": custom_pilar,
-                                            "gancho_visual": custom_hook if custom_hook else "N/A",
-                                            "script": None
-                                        }
-                                        current_topic['ideas'].append(new_custom_idea)
-                                        st.success("Idea agregada.")
-                                        st.rerun()
-                                    else:
-                                        st.warning("El título es obligatorio.")
-
-                        st.write("---")
-                        for idea in current_topic['ideas']:
-                            with st.expander(f"[{idea['pilar']}] {idea['titulo']}"):
-                                st.write(f"**Gancho:** {idea['gancho_visual']}")
-                                if idea.get('script'):
-                                    st.success("✅ Guión listo")
-
-        # --- VISTA 3: EL GUIONISTA ---
-        elif stage == "3. El Guionista ✍️":
-            st.subheader("✍️ Guionización")
-            
-            if not current_profile['topics']:
-                st.warning("⚠️ Primero crea Temas e Ideas en la Fase 2.")
-            else:
-                # Selector de Tema
-                topic_options = {tid: t['name'] for tid, t in current_profile['topics'].items()}
-                selected_topic_id = st.selectbox(
-                    "Seleccionar Tema:",
-                    options=list(topic_options.keys()),
-                    format_func=lambda x: topic_options[x],
-                    key="script_topic_selector"
-                )
-                current_topic = current_profile['topics'][selected_topic_id]
-                
-                if not current_topic['ideas']:
-                    st.warning("Este tema no tiene ideas aún.")
-                else:
-                    # Selector de Idea
-                    idea_options = {idea['id']: idea['titulo'] for idea in current_topic['ideas']}
-                    selected_idea_id = st.selectbox(
-                        "Seleccionar Idea:",
-                        options=list(idea_options.keys()),
-                        format_func=lambda x: idea_options[x],
-                        key="script_idea_selector"
-                    )
-                    
-                    # Encontrar objeto idea seleccionado
-                    selected_idea = next((i for i in current_topic['ideas'] if i['id'] == selected_idea_id), None)
-                    
-                    if selected_idea:
-                        st.caption(f"Gancho: {selected_idea['gancho_visual']}")
+                        # Encontrar objeto idea seleccionado
+                        selected_idea = next((i for i in current_topic['ideas'] if i['id'] == selected_idea_id), None)
                         
-                        # Configuración Avanzada (Prompt Editable)
-                        with st.expander("⚙️ Configuración Avanzada del Guionista", expanded=False):
-                            default_script_prompt = """Eres el Guionista Senior de Brand People. Escribe el guión para la idea seleccionada.
-                 
+                        if selected_idea:
+                            st.caption(f"Gancho: {selected_idea['gancho_visual']}")
+                            
+                            # Configuración Avanzada (Prompt Editable)
+                            with st.expander("⚙️ Configuración Avanzada del Guionista", expanded=False):
+                                default_script_prompt = """Eres el Guionista Senior de Brand People. Escribe el guión para la idea seleccionada.
+                     
 LA FÓRMULA MATEMÁTICA DEL GUIÓN (NO TE DESVÍES):
 1. EL GANCHO (0-3 seg): Prohibido saludar. Inicia con Afirmación Polémica, Lista o Reto.
 2. EL CUERPO (4-50 seg): Velocidad alta. Frases cortas. Jerga técnica explicada rápido.
@@ -502,36 +502,36 @@ Perfil: {profile_str}
 Idea: {idea_str}
 
 Formato: Texto plano, líneas dobles."""
+                                
+                                script_instructions = st.text_area(
+                                    "Instrucciones para el Guionista (Prompt):", 
+                                    value=default_script_prompt,
+                                    height=300,
+                                    help="Puedes editar estas instrucciones. Mantén {profile_str} y {idea_str} donde quieras que se inserten los datos."
+                                )
                             
-                            script_instructions = st.text_area(
-                                "Instrucciones para el Guionista (Prompt):", 
-                                value=default_script_prompt,
-                                height=300,
-                                help="Puedes editar estas instrucciones. Mantén {profile_str} y {idea_str} donde quieras que se inserten los datos."
-                            )
-                        
-                        if st.button("Escribir Guión", type="primary", use_container_width=True):
-                            if not client:
-                                st.error("Falta API Key.")
-                            else:
-                                with st.spinner("Escribiendo..."):
-                                    profile_str = json.dumps(current_profile['dna'])
-                                    idea_str = json.dumps(selected_idea)
-                                    
-                                    final_script_prompt = script_instructions.replace("{profile_str}", profile_str).replace("{idea_str}", idea_str)
-                                    
-                                    try:
-                                        response = client.chat.completions.create(
-                                            model="gpt-4o",
-                                            messages=[
-                                                {"role": "system", "content": "Eres un guionista experto."},
-                                                {"role": "user", "content": final_script_prompt}
-                                            ]
-                                        )
-                                        selected_idea['script'] = response.choices[0].message.content
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"Error: {e}")
-                        
-                        if selected_idea.get('script'):
-                            st.text_area("Teleprompter:", value=selected_idea['script'], height=300)
+                            if st.button("Escribir Guión", type="primary", use_container_width=True):
+                                if not client:
+                                    st.error("Falta API Key.")
+                                else:
+                                    with st.spinner("Escribiendo..."):
+                                        profile_str = json.dumps(current_profile['dna'])
+                                        idea_str = json.dumps(selected_idea)
+                                        
+                                        final_script_prompt = script_instructions.replace("{profile_str}", profile_str).replace("{idea_str}", idea_str)
+                                        
+                                        try:
+                                            response = client.chat.completions.create(
+                                                model="gpt-4o",
+                                                messages=[
+                                                    {"role": "system", "content": "Eres un guionista experto."},
+                                                    {"role": "user", "content": final_script_prompt}
+                                                ]
+                                            )
+                                            selected_idea['script'] = response.choices[0].message.content
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error: {e}")
+                            
+                            if selected_idea.get('script'):
+                                st.text_area("Teleprompter:", value=selected_idea['script'], height=300)
