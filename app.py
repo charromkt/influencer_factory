@@ -32,7 +32,40 @@ def init_session_state():
     if 'data' not in st.session_state:
         st.session_state['data'] = {
             "current_profile_id": None,
-            "profiles": {} 
+            "profiles": {},
+            "prompts": {
+                "strategist": """Actúa como un Estratega de Contenido "Relatable" y Humano.
+Tu objetivo es generar ideas que conecten desde la EMPATÍA y la SIMPLICIDAD, no desde el "marketing agresivo".
+
+Usa el perfil JSON para generar 10 ideas de video para el tema '{topic_name}'.
+
+REGLAS DE ORO:
+- Nada de "trucos virales" forzados.
+- Busca lo cotidiano, lo simple, lo que le pasa a todo el mundo.
+- Lenguaje natural, como si le hablaras a un amigo.
+
+Usa estos pilares pero con enfoque SIMPLE:
+1. EDUCACIÓN (Tips rápidos y útiles, sin tecnicismos)
+2. CURIOSIDAD (Cosas que no sabías, datos curiosos simples)
+3. OPINIÓN/REFLEXIÓN (Pensamientos honestos, no polémicas vacías)
+4. LIFESTYLE (Vlog, día a día, detrás de cámaras real)
+5. GAMIFICACIÓN (Retos sencillos, preguntas a la audiencia)
+
+Perfil: {profile_str}
+
+Output esperado: JSON con clave 'ideas' (lista de objetos {'id': 'uuid', 'titulo', 'pilar', 'gancho_visual', 'script': null}).""",
+                "scriptwriter": """Eres el Guionista Senior de Brand People. Escribe el guión para la idea seleccionada.
+
+LA FÓRMULA MATEMÁTICA DEL GUIÓN (NO TE DESVÍES):
+1. EL GANCHO (0-3 seg): Prohibido saludar. Inicia con Afirmación Polémica, Lista o Reto.
+2. EL CUERPO (4-50 seg): Velocidad alta. Frases cortas. Jerga técnica explicada rápido.
+3. EL CTA (Final): Llamado a la acción específico.
+
+Perfil: {profile_str}
+Idea: {idea_str}
+
+Formato: Texto plano, líneas dobles."""
+            }
         }
     
     # Migración de datos antiguos (si existen) a la nueva estructura
@@ -51,6 +84,42 @@ def init_session_state():
         for key in ['profile', 'chat_history', 'ideas', 'selected_idea', 'script']:
             if key in st.session_state:
                 del st.session_state[key]
+
+    # Asegurar que 'prompts' exista (para sesiones activas que recargan)
+    if 'prompts' not in st.session_state['data']:
+        st.session_state['data']['prompts'] = {
+            "strategist": """Actúa como un Estratega de Contenido "Relatable" y Humano.
+Tu objetivo es generar ideas que conecten desde la EMPATÍA y la SIMPLICIDAD, no desde el "marketing agresivo".
+
+Usa el perfil JSON para generar 10 ideas de video para el tema '{topic_name}'.
+
+REGLAS DE ORO:
+- Nada de "trucos virales" forzados.
+- Busca lo cotidiano, lo simple, lo que le pasa a todo el mundo.
+- Lenguaje natural, como si le hablaras a un amigo.
+
+Usa estos pilares pero con enfoque SIMPLE:
+1. EDUCACIÓN (Tips rápidos y útiles, sin tecnicismos)
+2. CURIOSIDAD (Cosas que no sabías, datos curiosos simples)
+3. OPINIÓN/REFLEXIÓN (Pensamientos honestos, no polémicas vacías)
+4. LIFESTYLE (Vlog, día a día, detrás de cámaras real)
+5. GAMIFICACIÓN (Retos sencillos, preguntas a la audiencia)
+
+Perfil: {profile_str}
+
+Output esperado: JSON con clave 'ideas' (lista de objetos {'id': 'uuid', 'titulo', 'pilar', 'gancho_visual', 'script': null}).""",
+            "scriptwriter": """Eres el Guionista Senior de Brand People. Escribe el guión para la idea seleccionada.
+
+LA FÓRMULA MATEMÁTICA DEL GUIÓN (NO TE DESVÍES):
+1. EL GANCHO (0-3 seg): Prohibido saludar. Inicia con Afirmación Polémica, Lista o Reto.
+2. EL CUERPO (4-50 seg): Velocidad alta. Frases cortas. Jerga técnica explicada rápido.
+3. EL CTA (Final): Llamado a la acción específico.
+
+Perfil: {profile_str}
+Idea: {idea_str}
+
+Formato: Texto plano, líneas dobles."""
+        }
 
 init_session_state()
 
@@ -353,6 +422,15 @@ with col_tools:
                         st.divider()
                         st.subheader(f"💡 Ideas para: {current_topic['name']}")
                         
+                        # Configuración del Estratega (Prompt Editable)
+                        with st.expander("⚙️ Configuración del Estratega (Prompt)", expanded=False):
+                            st.session_state['data']['prompts']['strategist'] = st.text_area(
+                                "Instrucciones para el Estratega:", 
+                                value=st.session_state['data']['prompts']['strategist'],
+                                height=300,
+                                help="Edita las instrucciones para cambiar cómo se generan las ideas. Mantén {topic_name} y {profile_str}."
+                            )
+
                         # Generar Ideas (Si está vacío)
                         if not current_topic['ideas']:
                             if st.button(f"Generar Ideas para {current_topic['name']}", type="primary", use_container_width=True):
@@ -361,20 +439,16 @@ with col_tools:
                                 else:
                                     with st.spinner("Pensando..."):
                                         profile_str = json.dumps(current_profile['dna'])
-                                        ideas_prompt = f"""
-                                        Actúa como Director Creativo. Usando el perfil JSON, genera 10 ideas de video para el tema '{current_topic['name']}'.
-                                        Basadas en los 5 Pilares: EDUCACIÓN, CURIOSIDAD, POLÉMICA, LIFESTYLE, GAMIFICACIÓN.
                                         
-                                        Perfil: {profile_str}
-                                        
-                                        Output esperado: JSON con clave 'ideas' (lista de objetos {{'id': 'uuid', 'titulo', 'pilar', 'gancho_visual', 'script': null}}).
-                                        """
+                                        # Usar el prompt editable
+                                        raw_prompt = st.session_state['data']['prompts']['strategist']
+                                        ideas_prompt = raw_prompt.replace("{topic_name}", current_topic['name']).replace("{profile_str}", profile_str)
                                         
                                         try:
                                             response = client.chat.completions.create(
                                                 model="gpt-4o",
                                                 messages=[
-                                                    {"role": "system", "content": "Eres un experto en marketing viral. Devuelve JSON."},
+                                                    {"role": "system", "content": "Eres un experto en crear conexión humana y contenido auténtico. Devuelve JSON."},
                                                     {"role": "user", "content": ideas_prompt}
                                                 ],
                                                 response_format={"type": "json_object"}
@@ -403,6 +477,7 @@ with col_tools:
                                         profile_str = json.dumps(current_profile['dna'])
                                         more_ideas_prompt = f"""
                                         Genera 5 ideas ADICIONALES de video para el tema '{current_topic['name']}' y este perfil.
+                                        MANTÉN EL ENFOQUE: Simple, humano, relatable, sin forzar la viralidad.
                                         Perfil: {profile_str}
                                         Output: JSON con clave 'ideas' (lista de objetos {{'titulo', 'pilar', 'gancho_visual'}}).
                                         """
@@ -410,7 +485,7 @@ with col_tools:
                                             response = client.chat.completions.create(
                                                 model="gpt-4o",
                                                 messages=[
-                                                    {"role": "system", "content": "Eres un experto en marketing viral. Devuelve JSON."},
+                                                    {"role": "system", "content": "Eres un experto en contenido auténtico. Devuelve JSON."},
                                                     {"role": "user", "content": more_ideas_prompt}
                                                 ],
                                                 response_format={"type": "json_object"}
@@ -491,21 +566,9 @@ with col_tools:
                             
                             # Configuración Avanzada (Prompt Editable)
                             with st.expander("⚙️ Configuración Avanzada del Guionista", expanded=False):
-                                default_script_prompt = """Eres el Guionista Senior de Brand People. Escribe el guión para la idea seleccionada.
-                     
-LA FÓRMULA MATEMÁTICA DEL GUIÓN (NO TE DESVÍES):
-1. EL GANCHO (0-3 seg): Prohibido saludar. Inicia con Afirmación Polémica, Lista o Reto.
-2. EL CUERPO (4-50 seg): Velocidad alta. Frases cortas. Jerga técnica explicada rápido.
-3. EL CTA (Final): Llamado a la acción específico.
-
-Perfil: {profile_str}
-Idea: {idea_str}
-
-Formato: Texto plano, líneas dobles."""
-                                
-                                script_instructions = st.text_area(
+                                st.session_state['data']['prompts']['scriptwriter'] = st.text_area(
                                     "Instrucciones para el Guionista (Prompt):", 
-                                    value=default_script_prompt,
+                                    value=st.session_state['data']['prompts']['scriptwriter'],
                                     height=300,
                                     help="Puedes editar estas instrucciones. Mantén {profile_str} y {idea_str} donde quieras que se inserten los datos."
                                 )
@@ -518,7 +581,9 @@ Formato: Texto plano, líneas dobles."""
                                         profile_str = json.dumps(current_profile['dna'])
                                         idea_str = json.dumps(selected_idea)
                                         
-                                        final_script_prompt = script_instructions.replace("{profile_str}", profile_str).replace("{idea_str}", idea_str)
+                                        # Usar el prompt editable
+                                        raw_prompt = st.session_state['data']['prompts']['scriptwriter']
+                                        final_script_prompt = raw_prompt.replace("{profile_str}", profile_str).replace("{idea_str}", idea_str)
                                         
                                         try:
                                             response = client.chat.completions.create(
